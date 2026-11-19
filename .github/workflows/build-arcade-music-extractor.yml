@@ -1,0 +1,68 @@
+name: Build Arcade Music Extractor (Windows)
+
+on:
+  push:
+    paths:
+      - "ArcadeMusicExtractor/**"
+      - ".github/workflows/build-arcade-music-extractor.yml"
+    tags:
+      - "extractor-v*"
+  pull_request:
+    paths:
+      - "ArcadeMusicExtractor/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ArcadeMusicExtractor
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check the GUI module imports with Tk
+        run: python -c "import arcade_music_extractor.gui"
+
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller==6.11.1
+
+      - name: Build GUI executable
+        run: >
+          pyinstaller --noconfirm --onefile --windowed
+          --name ArcadeMusicExtractor run_extractor.py
+
+      - name: Build command-line executable
+        run: >
+          pyinstaller --noconfirm --onefile --console
+          --name ArcadeMusicExtractor-cli run_extractor.py
+
+      - name: Smoke-test the CLI build
+        run: dist\ArcadeMusicExtractor-cli.exe --version
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Copy-Item README.md dist\
+          Compress-Archive -Path dist\* -DestinationPath ArcadeMusicExtractor-windows.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ArcadeMusicExtractor-windows
+          path: ArcadeMusicExtractor/ArcadeMusicExtractor-windows.zip
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/extractor-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ArcadeMusicExtractor/ArcadeMusicExtractor-windows.zip
